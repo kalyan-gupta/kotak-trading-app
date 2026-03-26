@@ -10,13 +10,13 @@ django-ratelimit>=4.1.0
 psycopg2-binary>=2.9.0
 
 # Kotak Neo API
-neo-api-client>=1.1.0
+git+https://github.com/Kotak-Neo/Kotak-neo-api-v2.git@v2.0.1#egg=neo_api_client
 
 # WebSocket & Async
 channels>=4.0.0
 channels-redis>=4.1.0
 daphne>=4.0.0
-websockets>=11.0.0
+websockets>=8.1
 
 # Celery
 celery>=5.3.0

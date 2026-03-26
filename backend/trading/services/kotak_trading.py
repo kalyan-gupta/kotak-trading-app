@@ -134,22 +134,30 @@ class KotakTradingService:
                     'message': 'Order cannot be modified'
                 }
             
+            # Map order_type if provided
+            api_order_type = None
+            if 'order_type' in modify_data:
+                order_type = modify_data['order_type']
+                if order_type == 'MARKET':
+                    api_order_type = 'MKT'
+                elif order_type == 'LIMIT':
+                    api_order_type = 'L'
+                elif order_type == 'SL':
+                    api_order_type = 'SL'
+                elif order_type == 'SL-M':
+                    api_order_type = 'SL-M'
+            
             params = {
                 'order_id': order.order_id,
-                'exchange': order.exchange,
-                'trading_symbol': order.trading_symbol,
-                'symbol_token': order.symbol_token,
+                'price': str(modify_data.get('price', order.price)) if 'price' in modify_data else str(order.price),
+                'quantity': str(modify_data.get('quantity', order.quantity)) if 'quantity' in modify_data else str(order.quantity),
+                'disclosed_quantity': str(modify_data.get('disclosed_quantity', order.disclosed_quantity)) if 'disclosed_quantity' in modify_data else str(order.disclosed_quantity),
+                'trigger_price': str(modify_data.get('trigger_price', order.trigger_price)) if 'trigger_price' in modify_data else str(order.trigger_price),
+                'validity': modify_data.get('validity', order.validity) if 'validity' in modify_data else order.validity,
             }
             
-            # Add modifiable fields
-            if 'quantity' in modify_data:
-                params['quantity'] = modify_data['quantity']
-            if 'price' in modify_data:
-                params['price'] = float(modify_data['price'])
-            if 'trigger_price' in modify_data:
-                params['trigger_price'] = float(modify_data['trigger_price'])
-            if 'order_type' in modify_data:
-                params['order_type'] = modify_data['order_type']
+            if api_order_type:
+                params['order_type'] = api_order_type
             
             logger.info(f"Modifying order with params: {params}")
             
@@ -211,10 +219,12 @@ class KotakTradingService:
             
             params = {
                 'order_id': order.order_id,
-                'exchange': order.exchange,
-                'trading_symbol': order.trading_symbol,
-                'symbol_token': order.symbol_token,
+                'isVerify': True  # Check status before cancelling
             }
+            
+            # Add AMO if applicable
+            if order.is_amo:
+                params['amo'] = 'YES'
             
             logger.info(f"Cancelling order: {order.order_id}")
             
@@ -287,8 +297,8 @@ class KotakTradingService:
             Dictionary with order book data
         """
         try:
-            response = self.client.order_book()
-            logger.info(f"Order book response received")
+            response = self.client.order_report()
+            logger.info(f"Order report response received")
             
             if response and 'data' in response:
                 return {
@@ -318,8 +328,8 @@ class KotakTradingService:
             Dictionary with trade book data
         """
         try:
-            response = self.client.trade_book()
-            logger.info(f"Trade book response received")
+            response = self.client.trade_report()
+            logger.info(f"Trade report response received")
             
             if response and 'data' in response:
                 return {
@@ -501,40 +511,107 @@ class KotakTradingService:
             }
     
     def _prepare_order_params(self, order_data):
-        """Prepare order parameters for API call."""
+        """Prepare order parameters for Kotak Neo API v2."""
+        # Map exchange to exchange_segment
+        exchange = order_data.get('exchange', 'NSE')
+        instrument_type = order_data.get('instrument_type', 'EQ')
+        
+        if exchange == 'NSE' and instrument_type == 'EQ':
+            exchange_segment = 'nse_cm'
+        elif exchange == 'BSE' and instrument_type == 'EQ':
+            exchange_segment = 'bse_cm'
+        elif exchange == 'NSE' and instrument_type in ['FUT', 'OPT']:
+            exchange_segment = 'nse_fo'
+        elif exchange == 'BSE' and instrument_type in ['FUT', 'OPT']:
+            exchange_segment = 'bse_fo'
+        elif exchange == 'MCX':
+            exchange_segment = 'mcx_fo'
+        elif exchange == 'NCDEX':
+            exchange_segment = 'cde_fo'
+        else:
+            exchange_segment = 'nse_cm'  # default
+        
+        # Map product_type to product
+        product_type = order_data.get('product_type', 'INTRADAY')
+        if product_type == 'INTRADAY':
+            product = 'MIS'
+        elif product_type == 'DELIVERY':
+            product = 'CNC'
+        elif product_type == 'NORMAL':
+            product = 'NRML'
+        elif product_type == 'BO':
+            product = 'BO'
+        elif product_type == 'CO':
+            product = 'CO'
+        elif product_type == 'MTF':
+            product = 'MTF'
+        else:
+            product = 'MIS'  # default
+        
+        # Map order_type
+        order_type = order_data.get('order_type', 'MARKET')
+        if order_type == 'MARKET':
+            api_order_type = 'MKT'
+        elif order_type == 'LIMIT':
+            api_order_type = 'L'
+        elif order_type == 'SL':
+            api_order_type = 'SL'
+        elif order_type == 'SL-M':
+            api_order_type = 'SL-M'
+        else:
+            api_order_type = 'MKT'
+        
+        # Map transaction_type
+        transaction_type = order_data.get('transaction_type', 'BUY')
+        if transaction_type == 'BUY':
+            api_transaction_type = 'B'
+        elif transaction_type == 'SELL':
+            api_transaction_type = 'S'
+        else:
+            api_transaction_type = 'B'
+        
         params = {
-            'exchange': order_data.get('exchange', 'NSE'),
-            'trading_symbol': order_data.get('trading_symbol'),
-            'symbol_token': order_data.get('symbol_token'),
-            'transaction_type': order_data.get('transaction_type'),
-            'quantity': order_data.get('quantity'),
-            'order_type': order_data.get('order_type', 'MARKET'),
-            'product_type': order_data.get('product_type', 'INTRADAY'),
+            'exchange_segment': exchange_segment,
+            'product': product,
+            'price': str(order_data.get('price', '0')),
+            'order_type': api_order_type,
+            'quantity': str(order_data.get('quantity', 0)),
             'validity': order_data.get('validity', 'DAY'),
+            'trading_symbol': order_data.get('trading_symbol'),
+            'transaction_type': api_transaction_type,
+            'amo': 'NO',  # default
+            'disclosed_quantity': str(order_data.get('disclosed_quantity', 0)),
+            'market_protection': str(order_data.get('market_protection', 0)),
+            'pf': 'N',  # default
         }
         
         # Add optional parameters
-        if order_data.get('price') and order_data.get('order_type') in ['LIMIT', 'SL']:
-            params['price'] = float(order_data['price'])
-        
-        if order_data.get('trigger_price') and order_data.get('order_type') in ['SL', 'SL-M']:
-            params['trigger_price'] = float(order_data['trigger_price'])
-        
-        if order_data.get('disclosed_quantity'):
-            params['disclosed_quantity'] = order_data['disclosed_quantity']
+        if order_data.get('trigger_price') and api_order_type in ['SL', 'SL-M']:
+            params['trigger_price'] = str(order_data['trigger_price'])
         
         # Bracket Order fields
-        if order_data.get('product_type') == 'BO':
+        if product == 'BO':
             if order_data.get('stop_loss'):
-                params['stop_loss'] = float(order_data['stop_loss'])
+                params['stop_loss_value'] = str(order_data['stop_loss'])
+                params['stop_loss_type'] = 'Absolute'  # or 'Ticks'
             if order_data.get('target'):
-                params['target'] = float(order_data['target'])
+                params['square_off_value'] = str(order_data['target'])
+                params['square_off_type'] = 'Absolute'  # or 'Ticks'
             if order_data.get('trailing_stop_loss'):
-                params['trailing_stop_loss'] = float(order_data['trailing_stop_loss'])
+                params['trailing_stop_loss'] = 'Y'
+                params['trailing_sl_value'] = str(order_data['trailing_stop_loss'])
+            if order_data.get('symbol_token'):
+                params['scrip_token'] = str(order_data['symbol_token'])
+            if order_data.get('last_traded_price'):
+                params['last_traded_price'] = str(order_data['last_traded_price'])
         
         # Cover Order fields
-        if order_data.get('product_type') == 'CO' and order_data.get('stop_loss'):
-            params['stop_loss'] = float(order_data['stop_loss'])
+        if product == 'CO' and order_data.get('stop_loss'):
+            params['stop_loss_value'] = str(order_data['stop_loss'])
+            params['stop_loss_type'] = 'Absolute'
+        
+        if order_data.get('tag'):
+            params['tag'] = order_data['tag']
         
         return params
     

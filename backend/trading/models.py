@@ -414,7 +414,7 @@ class Position(models.Model):
         return self.realized_pnl + self.unrealized_pnl
     
     @property
-    pnl_percentage(self):
+    def pnl_percentage(self):
         if self.average_price and self.average_price > 0:
             return (self.unrealized_pnl / (self.average_price * self.quantity)) * 100
         return 0

@@ -34,13 +34,14 @@ class KotakAuthService:
         """Initialize Neo API client."""
         try:
             self.client = NeoAPI(
+                environment='prod',
                 consumer_key=self.credentials.get('consumer_key'),
-                consumer_secret=self.credentials.get('consumer_secret'),
-                environment='prod'
+                access_token=None,
+                neo_fin_key=None
             )
-            logger.info("Neo API client initialized successfully")
+            logger.info("Neo API v2 client initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize Neo API client: {e}")
+            logger.error(f"Failed to initialize Neo API v2 client: {e}")
             raise
     
     def generate_totp(self):
@@ -132,14 +133,39 @@ class KotakAuthService:
                     'message': 'Missing credentials (mobile number or MPIN)'
                 }
             
-            # Login with Kotak Neo API
-            login_response = self.client.login(
+            # Login with Kotak Neo API v2
+            # Step 1: TOTP Login
+            totp_login_response = self.client.totp_login(
                 mobile_number=mobile_number,
-                password=mpin,
-                otp=otp
+                ucc=ucc,
+                totp=otp
             )
             
-            logger.info(f"Login response: {login_response}")
+            logger.info(f"TOTP Login response: {totp_login_response}")
+            
+            if not totp_login_response or 'data' not in totp_login_response:
+                error_msg = totp_login_response.get('message', 'TOTP Login failed') if isinstance(totp_login_response, dict) else 'TOTP Login failed'
+                return {
+                    'success': False,
+                    'message': error_msg,
+                    'error': totp_login_response
+                }
+            
+            # Step 2: TOTP Validate (MPIN)
+            totp_validate_response = self.client.totp_validate(mpin=mpin)
+            
+            logger.info(f"TOTP Validate response: {totp_validate_response}")
+            
+            if not totp_validate_response or 'data' not in totp_validate_response:
+                error_msg = totp_validate_response.get('message', 'TOTP Validate failed') if isinstance(totp_validate_response, dict) else 'TOTP Validate failed'
+                return {
+                    'success': False,
+                    'message': error_msg,
+                    'error': totp_validate_response
+                }
+            
+            # Use the validate response as the final login response
+            login_response = totp_validate_response
             
             if login_response and 'data' in login_response:
                 data = login_response['data']
