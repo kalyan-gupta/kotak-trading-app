@@ -528,7 +528,7 @@ class OrderBook(models.Model):
     )
     
     # Order Book Data
-    order_id = models.CharField(max_length=50)
+    external_order_id = models.CharField(max_length=50)
     exchange = models.CharField(max_length=10, choices=Order.EXCHANGE_CHOICES)
     trading_symbol = models.CharField(max_length=50)
     transaction_type = models.CharField(max_length=10, choices=Order.TRANSACTION_CHOICES)
@@ -579,8 +579,8 @@ class TradeBook(models.Model):
     )
     
     # Trade Book Data
-    trade_id = models.CharField(max_length=50)
-    order_id = models.CharField(max_length=50)
+    external_trade_id = models.CharField(max_length=50)
+    external_order_id = models.CharField(max_length=50)
     exchange = models.CharField(max_length=10, choices=Order.EXCHANGE_CHOICES)
     trading_symbol = models.CharField(max_length=50)
     transaction_type = models.CharField(max_length=10, choices=Order.TRANSACTION_CHOICES)

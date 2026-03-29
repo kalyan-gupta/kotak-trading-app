@@ -65,10 +65,14 @@ class MarketDepthAdmin(admin.ModelAdmin):
 @admin.register(Watchlist)
 class WatchlistAdmin(admin.ModelAdmin):
     """Admin for Watchlist model."""
-    list_display = ['user', 'name', 'scrips_count', 'is_default', 'created_at']
+    list_display = ['user', 'name', 'get_scrips_count', 'is_default', 'created_at']
     list_filter = ['is_default', 'created_at']
     search_fields = ['user__username', 'name']
     filter_horizontal = ['scrips']
+
+    def get_scrips_count(self, obj):
+        return obj.scrips.count()
+    get_scrips_count.short_description = 'Scrips Count'
 
 
 @admin.register(ScripCache)
